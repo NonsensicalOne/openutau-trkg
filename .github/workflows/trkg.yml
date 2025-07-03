@@ -1,0 +1,171 @@
+name: Build OpenUTAU TRKG Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      openutau_version:
+        description: 'OpenUTAU version to package'
+        required: true
+        default: '0.1.4'
+        type: string
+
+env:
+  PACKAGE_NAME: openutau
+  OPENUTAU_VERSION: ${{ github.event.inputs.openutau_version || '0.1.4' }}
+
+jobs:
+  build-trkg:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget curl tar gzip build-essential
+        
+    - name: Download and compile TRKG
+      run: |
+        # You'll need to add the TRKG source code to your repo or download it
+        # For now, assuming TRKG binary is available or you compile it
+        # This is a placeholder - adjust based on how you get TRKG
+        echo "Setting up TRKG package manager..."
+        # wget https://github.com/your-repo/trkg/releases/latest/download/trkg
+        # chmod +x trkg
+        # sudo mv trkg /usr/local/bin/
+        
+    - name: Download OpenUTAU
+      run: |
+        echo "Downloading OpenUTAU version $OPENUTAU_VERSION..."
+        wget https://github.com/stakira/OpenUtau/releases/download/v$OPENUTAU_VERSION/OpenUtau-linux-x64.tar.gz
+        
+    - name: Create package structure
+      run: |
+        echo "Creating package structure..."
+        mkdir -p $PACKAGE_NAME/data/usr/local/bin
+        mkdir -p $PACKAGE_NAME/data/usr/local/share/openutau
+        mkdir -p $PACKAGE_NAME/data/usr/local/share/applications
+        mkdir -p $PACKAGE_NAME/data/usr/local/share/icons/hicolor/256x256/apps
+        
+    - name: Extract and organize OpenUTAU
+      run: |
+        echo "Extracting OpenUTAU..."
+        mkdir temp
+        tar -xzf OpenUtau-linux-x64.tar.gz -C temp/
+        
+        echo "Organizing files..."
+        cp -r temp/* $PACKAGE_NAME/data/usr/local/share/openutau/
+        chmod +x $PACKAGE_NAME/data/usr/local/share/openutau/OpenUtau
+        
+    - name: Create wrapper script
+      run: |
+        cat > $PACKAGE_NAME/data/usr/local/bin/openutau << 'EOF'
+        #!/bin/bash
+        cd "$HOME/.local/data/usr/local/share/openutau"
+        exec ./OpenUtau "$@"
+        EOF
+        chmod +x $PACKAGE_NAME/data/usr/local/bin/openutau
+        
+    - name: Create desktop file
+      run: |
+        cat > $PACKAGE_NAME/data/usr/local/share/applications/openutau.desktop << 'EOF'
+        [Desktop Entry]
+        Version=1.0
+        Type=Application
+        Name=OpenUTAU
+        Comment=Open-source singing synthesis toolchain
+        Exec=openutau
+        Icon=openutau
+        Terminal=false
+        Categories=Audio;AudioVideo;
+        MimeType=application/x-ustx;application/x-ust;
+        EOF
+        
+    - name: Create control file
+      run: |
+        cat > $PACKAGE_NAME/control.trkg << EOF
+        Name: openutau
+        Version: $OPENUTAU_VERSION
+        Description: OpenUTAU is a free, open-source singing synthesis toolchain for creating AI voices. It supports UTAU voice banks and provides modern editing capabilities.
+        Author: stakira
+        Maintainer: GitHub Actions <actions@github.com>
+        Homepage: https://github.com/stakira/OpenUtau
+        License: MIT
+        Architecture: x86_64
+        Dependencies: dotnet-runtime-6.0
+        Section: multimedia
+        Priority: optional
+        Installed-Size: $(du -sk $PACKAGE_NAME/data | cut -f1)
+        EOF
+        
+    - name: Build TRKG package
+      run: |
+        cd $PACKAGE_NAME
+        echo "Building TRKG package..."
+        tar -czf ../openutau-$OPENUTAU_VERSION.trkg data control.trkg
+        cd ..
+        
+    - name: Calculate package hash
+      run: |
+        echo "Calculating SHA256 hash..."
+        sha256sum openutau-$OPENUTAU_VERSION.trkg > openutau-$OPENUTAU_VERSION.trkg.sha256
+        
+    - name: Create release notes
+      run: |
+        cat > release_notes.md << EOF
+        # OpenUTAU TRKG Package v$OPENUTAU_VERSION
+        
+        This is a TRKG package for OpenUTAU v$OPENUTAU_VERSION.
+        
+        ## Installation
+        
+        1. Install the TRKG package manager
+        2. Download the .trkg file
+        3. Install with: \`trkg install openutau-$OPENUTAU_VERSION.trkg\`
+        4. Run with: \`openutau\`
+        
+        ## Requirements
+        
+        - Linux x86_64
+        - .NET Runtime 6.0 or later
+        - Audio system (PulseAudio/ALSA)
+        
+        ## Files
+        
+        - \`openutau-$OPENUTAU_VERSION.trkg\` - Main package
+        - \`openutau-$OPENUTAU_VERSION.trkg.sha256\` - SHA256 checksum
+        
+        ## Original OpenUTAU
+        
+        This package is based on OpenUTAU v$OPENUTAU_VERSION by stakira.
+        Original project: https://github.com/stakira/OpenUtau
+        EOF
+        
+    - name: Create or update release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name || format('v{0}', env.OPENUTAU_VERSION) }}
+        name: OpenUTAU TRKG v${{ env.OPENUTAU_VERSION }}
+        body_path: release_notes.md
+        files: |
+          openutau-${{ env.OPENUTAU_VERSION }}.trkg
+          openutau-${{ env.OPENUTAU_VERSION }}.trkg.sha256
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: openutau-trkg-${{ env.OPENUTAU_VERSION }}
+        path: |
+          openutau-${{ env.OPENUTAU_VERSION }}.trkg
+          openutau-${{ env.OPENUTAU_VERSION }}.trkg.sha256
+          release_notes.md
+        retention-days: 30
