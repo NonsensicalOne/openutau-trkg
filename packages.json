@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "name": "openutau",
+    "version": "0.1.529",
+    "description": "OpenUtau is a free, open-source editor made for the UTAU community.",
+    "url": "https://github.com/NonsensicalOne/openutau-trkg/releases/download/main/openutau-0.1.529.trkg",
+    "author": "NonsensicalOne",
+    "sha256": "877f6d3cb5038fa1d0b11248b096f9f263d9f6606760afffbc39b1c13eecca9c",
+    "dependencies": ["none"]
+  }
+]
