@@ -9,12 +9,13 @@ on:
       openutau_version:
         description: 'OpenUTAU version to package'
         required: true
-        default: '0.1.529'
+        default: '0.1.4'
         type: string
 
 env:
   PACKAGE_NAME: openutau
   OPENUTAU_VERSION: ${{ github.event.inputs.openutau_version || '0.1.4' }}
+  REPO_URL: https://github.com/${{ github.repository }}
 
 jobs:
   build-trkg:
@@ -27,7 +28,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y wget curl tar gzip build-essential
+        sudo apt-get install -y wget curl tar gzip build-essential jq
         
     - name: Download and compile TRKG
       run: |
@@ -42,7 +43,7 @@ jobs:
     - name: Download OpenUTAU
       run: |
         echo "Downloading OpenUTAU version $OPENUTAU_VERSION..."
-        wget https://github.com/stakira/OpenUtau/releases/download/build%2F$OPENUTAU_VERSION/OpenUtau-linux-x64.tar.gz
+        wget https://github.com/stakira/OpenUtau/releases/download/v$OPENUTAU_VERSION/OpenUtau-linux-x64.tar.gz
         
     - name: Create package structure
       run: |
@@ -114,6 +115,46 @@ jobs:
       run: |
         echo "Calculating SHA256 hash..."
         sha256sum openutau-$OPENUTAU_VERSION.trkg > openutau-$OPENUTAU_VERSION.trkg.sha256
+        PACKAGE_HASH=$(sha256sum openutau-$OPENUTAU_VERSION.trkg | cut -d' ' -f1)
+        echo "PACKAGE_HASH=$PACKAGE_HASH" >> $GITHUB_ENV
+        
+    - name: Download existing packages.json
+      run: |
+        echo "Downloading existing packages.json..."
+        if wget -q https://github.com/${{ github.repository }}/releases/latest/download/packages.json; then
+          echo "Found existing packages.json"
+        else
+          echo "No existing packages.json found, creating new one"
+          echo "[]" > packages.json
+        fi
+        
+    - name: Update packages.json
+      run: |
+        echo "Updating packages.json..."
+        DOWNLOAD_URL="${REPO_URL}/releases/download/v${OPENUTAU_VERSION}/openutau-${OPENUTAU_VERSION}.trkg"
+        
+        # Create new package entry
+        cat > new_package.json << EOF
+        {
+          "name": "openutau",
+          "version": "$OPENUTAU_VERSION",
+          "description": "OpenUTAU is a free, open-source singing synthesis toolchain for creating AI voices. It supports UTAU voice banks and provides modern editing capabilities.",
+          "url": "$DOWNLOAD_URL",
+          "author": "stakira",
+          "sha256": "$PACKAGE_HASH",
+          "dependencies": ["dotnet-runtime-6.0"]
+        }
+        EOF
+        
+        # Remove any existing openutau entries and add the new one
+        jq --argjson new_package "$(cat new_package.json)" '
+          map(select(.name != "openutau")) + [$new_package]
+        ' packages.json > packages_updated.json
+        
+        mv packages_updated.json packages.json
+        
+        echo "Updated packages.json:"
+        cat packages.json
         
     - name: Create release notes
       run: |
@@ -124,10 +165,23 @@ jobs:
         
         ## Installation
         
-        1. Install the TRKG package manager
-        2. Download the .trkg file
-        3. Install with: \`trkg install openutau-$OPENUTAU_VERSION.trkg\`
-        4. Run with: \`openutau\`
+        ### Using TRKG Package Manager
+        
+        1. Add this repository to your TRKG sources:
+           \`\`\`bash
+           trkg add-repo $REPO_URL/releases/latest/download/packages.json
+           \`\`\`
+        
+        2. Install OpenUTAU:
+           \`\`\`bash
+           trkg install openutau
+           \`\`\`
+        
+        ### Manual Installation
+        
+        1. Download the .trkg file
+        2. Install with: \`trkg install openutau-$OPENUTAU_VERSION.trkg\`
+        3. Run with: \`openutau\`
         
         ## Requirements
         
@@ -139,6 +193,7 @@ jobs:
         
         - \`openutau-$OPENUTAU_VERSION.trkg\` - Main package
         - \`openutau-$OPENUTAU_VERSION.trkg.sha256\` - SHA256 checksum
+        - \`packages.json\` - Package repository index
         
         ## Original OpenUTAU
         
@@ -155,17 +210,19 @@ jobs:
         files: |
           openutau-${{ env.OPENUTAU_VERSION }}.trkg
           openutau-${{ env.OPENUTAU_VERSION }}.trkg.sha256
+          packages.json
         draft: false
         prerelease: false
       env:
-        GITHUB_TOKEN: ${{ secrets.TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
         name: openutau-trkg-${{ env.OPENUTAU_VERSION }}
         path: |
           openutau-${{ env.OPENUTAU_VERSION }}.trkg
           openutau-${{ env.OPENUTAU_VERSION }}.trkg.sha256
+          packages.json
           release_notes.md
         retention-days: 30
