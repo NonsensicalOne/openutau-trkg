@@ -43,7 +43,7 @@ jobs:
     - name: Download OpenUTAU
       run: |
         echo "Downloading OpenUTAU version $OPENUTAU_VERSION..."
-        wget https://github.com/stakira/OpenUtau/releases/download/v$OPENUTAU_VERSION/OpenUtau-linux-x64.tar.gz
+        wget https://github.com/stakira/OpenUtau/releases/download/build%2F$OPENUTAU_VERSION/OpenUtau-linux-x64.tar.gz
         
     - name: Create package structure
       run: |
