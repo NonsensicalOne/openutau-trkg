@@ -9,7 +9,7 @@ on:
       openutau_version:
         description: 'OpenUTAU version to package'
         required: true
-        default: '0.1.4'
+        default: '0.1.529'
         type: string
 
 env:
@@ -42,7 +42,7 @@ jobs:
     - name: Download OpenUTAU
       run: |
         echo "Downloading OpenUTAU version $OPENUTAU_VERSION..."
-        wget https://github.com/stakira/OpenUtau/releases/download/v$OPENUTAU_VERSION/OpenUtau-linux-x64.tar.gz
+        wget https://github.com/stakira/OpenUtau/releases/download/build%2F$OPENUTAU_VERSION/OpenUtau-linux-x64.tar.gz
         
     - name: Create package structure
       run: |
